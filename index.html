@@ -258,6 +258,28 @@
   .save-btn:hover { background: var(--accent-dark); }
   .save-btn:active { transform: scale(0.97); }
 
+  .yt-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 14px;
+    background: #1a0a0a;
+    color: #ff4444;
+    border: 1px solid #3a1a1a;
+    border-radius: var(--radius-sm);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    cursor: pointer;
+    transition: all .2s;
+    margin-bottom: 14px;
+  }
+  .yt-btn:hover { background: #ff4444; color: #fff; border-color: #ff4444; }
+  .yt-btn svg { flex-shrink: 0; }
+
   .history-list { margin-top: 12px; }
   .history-item {
     display: flex;
@@ -746,6 +768,10 @@ function renderDay() {
             <div class="ex-arrow" id="arrow-${ex.id}">▾</div>
           </div>
           <div class="ex-body" id="body-${ex.id}">
+            <a class="yt-btn" href="https://www.youtube.com/results?search_query=${encodeURIComponent(ex.name + ' ejercicio como hacer')}" target="_blank" rel="noopener">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M23.5 6.2a3 3 0 0 0-2.1-2.1C19.5 3.5 12 3.5 12 3.5s-7.5 0-9.4.6A3 3 0 0 0 .5 6.2C0 8.1 0 12 0 12s0 3.9.6 5.8a3 3 0 0 0 2.1 2.1C4.5 20.5 12 20.5 12 20.5s7.5 0 9.4-.6a3 3 0 0 0 2.1-2.1C24 15.9 24 12 24 12s0-3.9-.5-5.8zM9.7 15.5V8.5l6.3 3.5-6.3 3.5z"/></svg>
+              Ver en YouTube
+            </a>
             <div class="tip-box" style="border-left-color:${d.color}">💡 ${ex.tip}</div>
             <div class="weight-section">
               <div class="weight-label">Registrar peso cargado</div>
