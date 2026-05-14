@@ -612,18 +612,44 @@ window.doCheckIn = (dayId) => {
 // ── HEADER STATS ─────────────────────────────────
 function updateHeaderStats() {
   const checkins = userData.checkins || [];
+  // checkin format: "YYYY-MM-DD-dayid" — extract unique dates
+  const doneDates = new Set(checkins.map(c => c.slice(0, 10)));
+
+  // This week Mon–Sun
   const today = new Date();
   const dow = today.getDay();
   const monday = new Date(today);
-  monday.setDate(today.getDate()-(dow===0?6:dow-1));
-  let weekCount=0;
-  for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);if(checkins.some(c=>c.startsWith(d.toISOString().slice(0,10))))weekCount++;}
-  const uniqueDays=new Set(checkins.map(c=>c.slice(0,10))).size;
-  let streak=0;const check=new Date(today);
-  for(let i=0;i<90;i++){const ds=check.toISOString().slice(0,10);const dw=check.getDay();const isRest=(dw===4);if(isRest||checkins.some(c=>c.startsWith(ds))){streak++;}else if(ds<todayStr()){break;}check.setDate(check.getDate()-1);}
-  document.getElementById('hs-week').textContent=weekCount;
-  document.getElementById('hs-total').textContent=uniqueDays;
-  document.getElementById('hs-streak').textContent=streak;
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  monday.setHours(0,0,0,0);
+  let weekCount = 0;
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    if (doneDates.has(d.toISOString().slice(0,10))) weekCount++;
+  }
+
+  // Total unique days trained
+  const totalDays = doneDates.size;
+
+  // Streak: consecutive trained days going back (Thursdays = rest, don't break)
+  let streak = 0;
+  const check = new Date(today);
+  check.setHours(0,0,0,0);
+  for (let i = 0; i < 180; i++) {
+    const ds = check.toISOString().slice(0,10);
+    const dw = check.getDay();
+    if (doneDates.has(ds) || dw === 4) {
+      streak++;
+    } else {
+      if (i === 0) { check.setDate(check.getDate()-1); continue; }
+      break;
+    }
+    check.setDate(check.getDate()-1);
+  }
+
+  document.getElementById('hs-week').textContent = weekCount;
+  document.getElementById('hs-total').textContent = totalDays;
+  document.getElementById('hs-streak').textContent = streak;
 }
 
 // ── REPORTS ──────────────────────────────────────
