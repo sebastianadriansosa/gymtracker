@@ -12,8 +12,6 @@ Abrí `index.html` en cualquier navegador. No necesita servidor ni instalación.
 2. Subí el archivo `index.html`
 3. En el repo → **Settings** → **Pages** → Source: `main` branch, carpeta `/root`
 4. En unos minutos tenés la app en `https://TU_USUARIO.github.io/TU_REPO/`
-5. Link a la pagina: https://sebastianadriansosa.github.io/gymtracker/
-6. Link a Firebase: https://console.firebase.google.com/project/gymtracker-519a4/firestore/databases/-default-/data/~2Fusers~2FNA4YNk4m6QPSyPt4ibT6KQ1Fwzv1
 
 ## 📱 Funciones
 
