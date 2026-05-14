@@ -656,12 +656,12 @@ function formatDate(str) {
 // ── TIMER ENGINE ─────────────────────────────────
 const timerState = {}; // keyed by exId
 
-function getRestSeconds(restStr) {
+window.getRestSeconds = function(restStr) {
   const m = restStr.match(/(\d+)/);
   return m ? parseInt(m[1]) : 60;
 }
 
-function playBeep(duration = 0.15, freq = 880, vol = 0.4) {
+window.playBeep = function(duration = 0.15, freq = 880, vol = 0.4) {
   try {
     const ctx = new (window.AudioContext || window.webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -675,7 +675,7 @@ function playBeep(duration = 0.15, freq = 880, vol = 0.4) {
   } catch(e) {}
 }
 
-function playAlarm(type) {
+window.playAlarm = function(type) {
   // type: 'warning' | 'done' | 'over10' | 'over20' | 'over30+'
   if (type === 'warning') {
     playBeep(0.12, 1046, 0.3);
@@ -695,13 +695,13 @@ function playAlarm(type) {
   }
 }
 
-function fmtSecs(s) {
+window.fmtSecs = function(s) {
   const neg = s < 0; s = Math.abs(s);
   const m = Math.floor(s/60), sec = s%60;
   return (neg?'+':'') + m + ':' + String(sec).padStart(2,'0');
 }
 
-function initTimer(exId, totalSeries, restSecs) {
+window.initTimer = function(exId, totalSeries, restSecs) {
   if (timerState[exId]) return; // already exists
   timerState[exId] = {
     exId, dayId: '', totalSeries, restSecs,
@@ -718,7 +718,7 @@ function initTimer(exId, totalSeries, restSecs) {
   };
 }
 
-function timerTick(exId) {
+window.timerTick = function(exId) {
   const t = timerState[exId];
   if (!t) return;
   const now = Date.now();
@@ -745,7 +745,7 @@ function timerTick(exId) {
   renderTimerWidget(exId);
 }
 
-function timerStart(exId) {
+window.timerStart = function(exId) {
   const t = timerState[exId];
   if (!t || t.phase !== 'idle') return;
   t.phase = 'active';
@@ -757,7 +757,7 @@ function timerStart(exId) {
   renderTimerWidget(exId);
 }
 
-function timerPause(exId) {
+window.timerPause = function(exId) {
   const t = timerState[exId];
   if (!t || t.phase !== 'active') return;
   // Save series duration
@@ -773,7 +773,7 @@ function timerPause(exId) {
   renderTimerWidget(exId);
 }
 
-function timerResume(exId) {
+window.timerResume = function(exId) {
   const t = timerState[exId];
   if (!t || (t.phase !== 'rest' && t.phase !== 'over')) return;
   // Save rest duration
@@ -789,7 +789,7 @@ function timerResume(exId) {
   renderTimerWidget(exId);
 }
 
-function timerStop(exId, dayId) {
+window.timerStop = function(exId, dayId) {
   const t = timerState[exId];
   if (!t) return;
   clearInterval(t.intervalId);
@@ -816,7 +816,7 @@ function timerStop(exId, dayId) {
   updateHeaderStats();
 }
 
-function renderTimerWidget(exId) {
+window.renderTimerWidget = function(exId) {
   const el = document.getElementById('timer-widget-' + exId);
   if (!el) return;
   const t = timerState[exId];
@@ -965,7 +965,7 @@ function renderDay() {
         <div class="ex-header" onclick="toggleEx('${ex.id}')">
           <div class="ex-num" style="background:${d.color}22;color:${d.color}">${i+1}</div>
           <div class="ex-info"><div class="ex-name">${ex.name}</div><div class="ex-meta">${ex.series} series · ${ex.reps} reps · ${ex.rest} descanso</div></div>
-          <div class="ex-weight-badge">${badge}</div>
+          <div class="ex-weight-badge" data-badge="${ex.id}">${badge}</div>
           <div class="ex-arrow" id="arrow-${ex.id}">▾</div>
         </div>
         <div class="ex-body" id="body-${ex.id}">
@@ -1000,13 +1000,13 @@ function renderDay() {
               : `<button class="ex-done-btn" onclick="doCompleteEx('${d.id}','${ex.id}')">◯ Marcar ejercicio como hecho</button>`
             }
           </div>
-          ${history.length>0?`<div class="history-list"><div class="weight-label" style="margin-top:12px">Historial</div>
+          ${history.length>0?`<div class="history-list"><div class="weight-label" style="margin-top:12px">Historial</div><div id="hist-${ex.id}">
             ${history.slice().reverse().slice(0,6).map((h,idx,arr)=>{
               const prev=arr[idx+1];
               let diff='';
               if(prev){const d=parseFloat((h.kg-prev.kg).toFixed(1));diff=d>0?`<span class="history-diff diff-up">▲ +${d}</span>`:d<0?`<span class="history-diff diff-down">▼ ${d}</span>`:`<span class="history-diff diff-same">= igual</span>`;}
               return `<div class="history-item"><span class="history-date">${formatDate(h.date)}</span><span><span class="history-val">${h.kg} kg</span>${diff}</span></div>`;
-            }).join('')}</div>`:''}
+            }).join('')}</div></div>`:''}
         </div>
       </div>`;
     });
@@ -1023,8 +1023,36 @@ window.saveEx = (exId) => {
   const kg = parseFloat(document.getElementById('w-'+exId).value);
   if (isNaN(kg)||kg<0) return;
   saveWeight(exId, kg);
-  renderDay();
   updateHeaderStats();
+  // Update badge without closing the card
+  const badge = document.querySelector(`[data-badge="${exId}"]`);
+  if (badge) badge.textContent = kg + ' kg';
+  // Flash save button
+  const btn = document.querySelector(`button[onclick="saveEx('${exId}')"]`);
+  if (btn) {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Guardado';
+    btn.style.background = '#4CAF50';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = ''; }, 1200);
+  }
+  // Refresh history list inside the card
+  const histEl = document.getElementById('hist-' + exId);
+  if (histEl) {
+    const history = getWeights(exId);
+    if (history.length > 0) {
+      histEl.innerHTML = history.slice().reverse().slice(0,6).map((h,idx,arr) => {
+        const prev = arr[idx+1];
+        let diff = '';
+        if (prev) {
+          const dv = parseFloat((h.kg-prev.kg).toFixed(1));
+          diff = dv>0 ? \`<span class="history-diff diff-up">▲ +\${dv}</span>\`
+               : dv<0 ? \`<span class="history-diff diff-down">▼ \${dv}</span>\`
+               : \`<span class="history-diff diff-same">= igual</span>\`;
+        }
+        return \`<div class="history-item"><span class="history-date">\${formatDate(h.date)}</span><span><span class="history-val">\${h.kg} kg</span>\${diff}</span></div>\`;
+      }).join('');
+    }
+  }
 };
 
 window.doCheckIn = (dayId) => {
