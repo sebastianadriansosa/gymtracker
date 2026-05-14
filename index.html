@@ -156,6 +156,71 @@
 
   .tip-box { background: var(--bg3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 12px; color: #aaa; margin-bottom: 14px; border-left: 3px solid; }
 
+  /* ── TIMER ── */
+  .timer-wrap {
+    background: var(--bg3); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+    margin-bottom: 14px;
+  }
+  .timer-series-row {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .timer-series-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--muted);
+  }
+  .series-dots { display: flex; gap: 6px; }
+  .series-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--border); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700; color: var(--muted);
+    transition: all .2s;
+  }
+  .series-dot.active { border-color: var(--accent); color: var(--accent); background: #1a2a00; }
+  .series-dot.done   { border-color: #4CAF50; color: #4CAF50; background: #0a1a0a; }
+
+  .timer-display {
+    text-align: center; padding: 10px 0 6px;
+  }
+  .timer-phase {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--muted); margin-bottom: 4px;
+  }
+  .timer-clock {
+    font-family: 'Bebas Neue', sans-serif; font-size: 52px;
+    line-height: 1; letter-spacing: 2px; transition: color .3s;
+  }
+  .timer-clock.rest   { color: #2EC4B6; }
+  .timer-clock.active { color: var(--accent); }
+  .timer-clock.over   { color: #F72585; }
+  .timer-clock.idle   { color: var(--muted); }
+
+  .timer-btns {
+    display: flex; gap: 8px; justify-content: center; margin-top: 10px; flex-wrap: wrap;
+  }
+  .tbtn {
+    padding: 9px 20px; border-radius: var(--radius-sm); border: none;
+    font-family: 'DM Sans', sans-serif; font-weight: 700; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 1px; cursor: pointer; transition: all .2s;
+  }
+  .tbtn-start  { background: var(--accent); color: #000; }
+  .tbtn-start:hover  { background: var(--accent-dark); }
+  .tbtn-pause  { background: #2EC4B622; color: #2EC4B6; border: 1px solid #2EC4B6; }
+  .tbtn-resume { background: #e8ff4722; color: var(--accent); border: 1px solid var(--accent); }
+  .tbtn-stop   { background: #ff000022; color: #ff4444; border: 1px solid #ff4444; }
+  .tbtn:active { transform: scale(0.96); }
+
+  .timer-history-mini {
+    margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+    font-size: 11px; color: var(--muted);
+  }
+  .timer-history-mini .th-row {
+    display: flex; justify-content: space-between; padding: 3px 0;
+  }
+  .th-over { color: #F72585; }
+  .th-ok   { color: #4CAF50; }
+
   .ex-done-btn {
     display: inline-flex; align-items: center; gap: 6px;
     padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid #333;
@@ -588,6 +653,260 @@ function formatDate(str) {
   return `${d}/${m}/${y}`;
 }
 
+// ── TIMER ENGINE ─────────────────────────────────
+const timerState = {}; // keyed by exId
+
+function getRestSeconds(restStr) {
+  const m = restStr.match(/(\d+)/);
+  return m ? parseInt(m[1]) : 60;
+}
+
+function playBeep(duration = 0.15, freq = 880, vol = 0.4) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(vol, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + duration);
+  } catch(e) {}
+}
+
+function playAlarm(type) {
+  // type: 'warning' | 'done' | 'over10' | 'over20' | 'over30+'
+  if (type === 'warning') {
+    playBeep(0.12, 1046, 0.3);
+    setTimeout(() => playBeep(0.12, 1046, 0.3), 180);
+  } else if (type === 'done') {
+    playBeep(0.2, 880, 0.5);
+    setTimeout(() => playBeep(0.2, 1046, 0.5), 250);
+    setTimeout(() => playBeep(0.4, 1318, 0.5), 500);
+  } else if (type === 'over10') {
+    playBeep(0.3, 660, 0.4);
+    setTimeout(() => playBeep(0.3, 660, 0.4), 400);
+    setTimeout(() => playBeep(0.3, 660, 0.4), 800);
+  } else if (type === 'over20') {
+    for (let i = 0; i < 4; i++) setTimeout(() => playBeep(0.25, 600, 0.4), i*350);
+  } else {
+    for (let i = 0; i < 5; i++) setTimeout(() => playBeep(0.3, 520, 0.5), i*300);
+  }
+}
+
+function fmtSecs(s) {
+  const neg = s < 0; s = Math.abs(s);
+  const m = Math.floor(s/60), sec = s%60;
+  return (neg?'+':'') + m + ':' + String(sec).padStart(2,'0');
+}
+
+function initTimer(exId, totalSeries, restSecs) {
+  if (timerState[exId]) return; // already exists
+  timerState[exId] = {
+    exId, dayId: '', totalSeries, restSecs,
+    phase: 'idle',      // idle | active | rest | over | done
+    currentSeries: 1,
+    seriesStart: null,
+    restStart: null,
+    elapsed: 0,         // seconds of current active phase
+    restElapsed: 0,
+    seriesLog: [],      // [{series, duration}]
+    restLog: [],        // [{between, duration, over}]
+    intervalId: null,
+    overAlarmAt: 0,     // track last over-alarm second
+  };
+}
+
+function timerTick(exId) {
+  const t = timerState[exId];
+  if (!t) return;
+  const now = Date.now();
+
+  if (t.phase === 'active') {
+    t.elapsed = Math.floor((now - t.seriesStart) / 1000);
+  } else if (t.phase === 'rest' || t.phase === 'over') {
+    t.restElapsed = Math.floor((now - t.restStart) / 1000);
+    const remaining = t.restSecs - t.restElapsed;
+
+    // Alarm triggers
+    if (remaining === 10 && !t._warned) { t._warned = true; playAlarm('warning'); }
+    if (remaining === 0 && !t._donePlayed) { t._donePlayed = true; t.phase = 'over'; playAlarm('done'); t.overAlarmAt = 0; }
+    if (t.phase === 'over') {
+      const over = t.restElapsed - t.restSecs;
+      if (over > 0 && over % 10 === 0 && over !== t.overAlarmAt) {
+        t.overAlarmAt = over;
+        if (over <= 10) playAlarm('over10');
+        else if (over <= 20) playAlarm('over20');
+        else playAlarm('over30');
+      }
+    }
+  }
+  renderTimerWidget(exId);
+}
+
+function timerStart(exId) {
+  const t = timerState[exId];
+  if (!t || t.phase !== 'idle') return;
+  t.phase = 'active';
+  t.seriesStart = Date.now();
+  t.elapsed = 0;
+  t._warned = false;
+  t._donePlayed = false;
+  t.intervalId = setInterval(() => timerTick(exId), 500);
+  renderTimerWidget(exId);
+}
+
+function timerPause(exId) {
+  const t = timerState[exId];
+  if (!t || t.phase !== 'active') return;
+  // Save series duration
+  const dur = Math.floor((Date.now() - t.seriesStart) / 1000);
+  t.seriesLog.push({ series: t.currentSeries, duration: dur });
+  // Start rest countdown
+  t.phase = 'rest';
+  t.restStart = Date.now();
+  t.restElapsed = 0;
+  t._warned = false;
+  t._donePlayed = false;
+  t.overAlarmAt = 0;
+  renderTimerWidget(exId);
+}
+
+function timerResume(exId) {
+  const t = timerState[exId];
+  if (!t || (t.phase !== 'rest' && t.phase !== 'over')) return;
+  // Save rest duration
+  const restDur = Math.floor((Date.now() - t.restStart) / 1000);
+  const over = Math.max(0, restDur - t.restSecs);
+  t.restLog.push({ between: t.currentSeries, duration: restDur, over });
+  t.currentSeries++;
+  t.phase = 'active';
+  t.seriesStart = Date.now();
+  t.elapsed = 0;
+  t._warned = false;
+  t._donePlayed = false;
+  renderTimerWidget(exId);
+}
+
+function timerStop(exId, dayId) {
+  const t = timerState[exId];
+  if (!t) return;
+  clearInterval(t.intervalId);
+  // If still active, save last series
+  if (t.phase === 'active') {
+    const dur = Math.floor((Date.now() - t.seriesStart) / 1000);
+    t.seriesLog.push({ series: t.currentSeries, duration: dur });
+  }
+  t.phase = 'done';
+  // Persist timer log to userData
+  if (!userData.timerLogs) userData.timerLogs = {};
+  const dayIndex = DAYS.findIndex(d => d.id === dayId);
+  const dateStr = dateForDayIndex(dayIndex);
+  const logKey = `${dateStr}-${dayId}-${exId}`;
+  userData.timerLogs[logKey] = {
+    date: dateStr, dayId, exId,
+    seriesLog: t.seriesLog,
+    restLog: t.restLog,
+    savedAt: new Date().toISOString(),
+  };
+  persistData();
+  delete timerState[exId];
+  renderDay();
+  updateHeaderStats();
+}
+
+function renderTimerWidget(exId) {
+  const el = document.getElementById('timer-widget-' + exId);
+  if (!el) return;
+  const t = timerState[exId];
+  if (!t) return;
+
+  const phase = t.phase;
+  let clockClass = 'timer-clock idle';
+  let phaseLabel = 'LISTO';
+  let clockVal = '0:00';
+
+  if (phase === 'active') {
+    clockClass = 'timer-clock active';
+    phaseLabel = `SERIE ${t.currentSeries} DE ${t.totalSeries}`;
+    clockVal = fmtSecs(t.elapsed);
+  } else if (phase === 'rest') {
+    clockClass = 'timer-clock rest';
+    const rem = t.restSecs - t.restElapsed;
+    phaseLabel = `DESCANSO — FALTAN`;
+    clockVal = fmtSecs(Math.max(0, rem));
+  } else if (phase === 'over') {
+    clockClass = 'timer-clock over';
+    const over = t.restElapsed - t.restSecs;
+    phaseLabel = `DESCANSO EXCEDIDO +`;
+    clockVal = fmtSecs(over);
+  } else if (phase === 'idle') {
+    clockClass = 'timer-clock idle';
+    phaseLabel = 'LISTO PARA INICIAR';
+    clockVal = '0:00';
+  }
+
+  // Series dots
+  const dots = Array.from({length: t.totalSeries}, (_,i) => {
+    const n = i+1;
+    let cls = 'series-dot';
+    if (t.seriesLog.find(s=>s.series===n)) cls += ' done';
+    else if (n === t.currentSeries && phase === 'active') cls += ' active';
+    return `<div class="${cls}">${n}</div>`;
+  }).join('');
+
+  // Mini history
+  let histHtml = '';
+  if (t.seriesLog.length > 0) {
+    histHtml = '<div class="timer-history-mini">';
+    t.seriesLog.forEach(s => {
+      histHtml += `<div class="th-row"><span>Serie ${s.series}</span><span>${fmtSecs(s.duration)}</span></div>`;
+    });
+    t.restLog.forEach(r => {
+      const cls = r.over > 0 ? 'th-over' : 'th-ok';
+      const over = r.over > 0 ? ` (+${r.over}s)` : '';
+      histHtml += `<div class="th-row ${cls}"><span>Descanso ${r.between}→${r.between+1}</span><span>${fmtSecs(r.duration)}${over}</span></div>`;
+    });
+    histHtml += '</div>';
+  }
+
+  // Buttons
+  let btns = '';
+  if (phase === 'idle') {
+    btns = `<button class="tbtn tbtn-start" onclick="timerStart('${exId}')">▶ Iniciar serie</button>`;
+  } else if (phase === 'active') {
+    btns = `<button class="tbtn tbtn-pause" onclick="timerPause('${exId}')">⏸ Pausa / Descanso</button>
+            <button class="tbtn tbtn-stop" onclick="timerStop('${exId}','${t.dayId}')">⏹ Terminar</button>`;
+  } else if (phase === 'rest' || phase === 'over') {
+    btns = `<button class="tbtn tbtn-resume" onclick="timerResume('${exId}')">▶ Siguiente serie</button>
+            <button class="tbtn tbtn-stop" onclick="timerStop('${exId}','${t.dayId}')">⏹ Terminar</button>`;
+  }
+
+  el.innerHTML = `
+    <div class="timer-series-row">
+      <span class="timer-series-label">Series</span>
+      <div class="series-dots">${dots}</div>
+    </div>
+    <div class="timer-display">
+      <div class="timer-phase">${phaseLabel}</div>
+      <div class="${clockClass}">${clockVal}</div>
+    </div>
+    <div class="timer-btns">${btns}</div>
+    ${histHtml}
+  `;
+}
+
+// Stop all timers when switching day
+const _origSwitchDay = window.switchDay;
+window.switchDay = (i) => {
+  Object.keys(timerState).forEach(k => {
+    if (timerState[k].intervalId) clearInterval(timerState[k].intervalId);
+    delete timerState[k];
+  });
+  _origSwitchDay(i);
+};
+
 // ── ROUTING ──────────────────────────────────────
 window.showView = (v) => {
   document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
@@ -655,6 +974,19 @@ function renderDay() {
             Ver en YouTube
           </a>
           <div class="tip-box" style="border-left-color:${d.color}">💡 ${ex.tip}</div>
+          <div class="timer-wrap" id="timer-widget-${ex.id}">
+            ${(()=>{
+              const restSecs = getRestSeconds(ex.rest);
+              const totalSeries = parseInt(ex.series) || 3;
+              initTimer(ex.id, totalSeries, restSecs);
+              if(timerState[ex.id]) timerState[ex.id].dayId = d.id;
+              const t = timerState[ex.id];
+              const dots = Array.from({length:totalSeries},(_,i)=>`<div class="series-dot">${i+1}</div>`).join('');
+              return `<div class="timer-series-row"><span class="timer-series-label">Series</span><div class="series-dots">${dots}</div></div>
+              <div class="timer-display"><div class="timer-phase">LISTO PARA INICIAR</div><div class="timer-clock idle">0:00</div></div>
+              <div class="timer-btns"><button class="tbtn tbtn-start" onclick="timerStart('${ex.id}')">▶ Iniciar serie</button></div>`;
+            })()}
+          </div>
           <div class="weight-label">Registrar peso cargado</div>
           <div class="weight-input-row">
             <input class="weight-input" type="number" id="w-${ex.id}" placeholder="${last!==null?last:'0'}" min="0" step="0.5" value="${last!==null?last:''}">
