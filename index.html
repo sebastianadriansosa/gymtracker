@@ -473,6 +473,20 @@ async function persistData() {
 // ── DATA HELPERS ─────────────────────────────────
 function todayStr() { return new Date().toISOString().slice(0,10); }
 
+// Returns the real calendar date (YYYY-MM-DD) for a given day index in the current week
+// dayIndex: 0=Mon,1=Tue,2=Wed,3=Thu,4=Fri,5=Sat,6=Sun
+function dateForDayIndex(dayIndex) {
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  const dow = today.getDay(); // 0=Sun,1=Mon,...6=Sat
+  // Monday of current week
+  const monday = new Date(today);
+  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
+  const target = new Date(monday);
+  target.setDate(monday.getDate() + dayIndex);
+  return target.toISOString().slice(0,10);
+}
+
 function saveWeight(exId, kg) {
   if (!userData.weights) userData.weights = {};
   if (!userData.weights[exId]) userData.weights[exId] = [];
@@ -494,20 +508,26 @@ function getLastWeight(exId) {
 
 function checkInDay(dayId) {
   if (!userData.checkins) userData.checkins = [];
-  const key = `${todayStr()}-${dayId}`;
+  const dayIndex = DAYS.findIndex(d => d.id === dayId);
+  const dateStr = dateForDayIndex(dayIndex);
+  const key = `${dateStr}-${dayId}`;
   if (!userData.checkins.includes(key)) userData.checkins.push(key);
   persistData();
 }
 
 function uncheckDay(dayId) {
   if (!userData.checkins) return;
-  const key = `${todayStr()}-${dayId}`;
+  const dayIndex = DAYS.findIndex(d => d.id === dayId);
+  const dateStr = dateForDayIndex(dayIndex);
+  const key = `${dateStr}-${dayId}`;
   userData.checkins = userData.checkins.filter(c => c !== key);
   persistData();
 }
 
 function isCheckedIn(dayId) {
-  return (userData.checkins || []).includes(`${todayStr()}-${dayId}`);
+  const dayIndex = DAYS.findIndex(d => d.id === dayId);
+  const dateStr = dateForDayIndex(dayIndex);
+  return (userData.checkins || []).includes(`${dateStr}-${dayId}`);
 }
 
 function formatDate(str) {
@@ -635,17 +655,24 @@ function updateHeaderStats() {
   const checkins = userData.checkins || [];
   const weights  = userData.weights  || {};
 
-  // All unique dates that have at least one checkin  e.g. "2025-05-11"
-  const doneDates = new Set(checkins.map(c => c.slice(0, 10)));
+  // checkin format: "YYYY-MM-DD-dayid"
+  // Build set of ALL unique dates that have a checkin (past or present)
+  const doneDates = new Set();
+  checkins.forEach(c => {
+    // c could be "2025-05-11-lunes" -> take first 10 chars
+    const dateStr = c.substring(0, 10);
+    // validate it looks like a date
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) doneDates.add(dateStr);
+  });
 
   const today = new Date();
   today.setHours(0,0,0,0);
-  const todayS = today.toISOString().slice(0,10);
 
-  // ── Semana: week number since first ever checkin ──
+  // ── Semana: calendar week number since first ever checkin ──
   let weekNum = 1;
   if (doneDates.size > 0) {
-    const firstDate = new Date(Array.from(doneDates).sort()[0]);
+    const sorted = Array.from(doneDates).sort();
+    const firstDate = new Date(sorted[0] + 'T00:00:00');
     const fd = firstDate.getDay();
     const firstMonday = new Date(firstDate);
     firstMonday.setDate(firstDate.getDate() - (fd === 0 ? 6 : fd - 1));
@@ -657,30 +684,39 @@ function updateHeaderStats() {
     weekNum = Math.floor((currentMonday - firstMonday) / (7*24*60*60*1000)) + 1;
   }
 
-  // ── Día: total unique days with a checkin ──
+  // ── Día: count of unique dates with checkin ──
   const totalDays = doneDates.size;
 
-  // ── Tareas hoy: exercises that have a weight entry saved on a checked-in date ──
-  // Count ALL exercises that have any weight entry on ANY checked-in day
-  // (so it reflects total tasks logged across all completed days)
+  // ── Tareas: exercises with weight on any checked-in date ──
   let tasksTotal = 0;
   Object.values(weights).forEach(arr => {
     if (Array.isArray(arr) && arr.some(e => doneDates.has(e.date))) tasksTotal++;
   });
 
-  // ── Racha: consecutive trained days going back (Thursdays = rest) ──
+  // ── Racha: consecutive days going back from today ──
+  // Skip today if not yet checked in (don't break streak)
+  // Skip Thursdays (rest day, never breaks streak)
   let streak = 0;
   const check = new Date(today);
-  for (let i = 0; i < 180; i++) {
+  check.setHours(0,0,0,0);
+  for (let i = 0; i < 365; i++) {
     const ds = check.toISOString().slice(0,10);
-    const dw = check.getDay();
-    if (doneDates.has(ds) || dw === 4) {
+    const dw = check.getDay(); // 0=Sun,1=Mon...4=Thu
+    const isThursday = dw === 4;
+    const isTrained = doneDates.has(ds);
+
+    if (i === 0 && !isTrained && !isThursday) {
+      // today not trained yet — skip without breaking
+      check.setDate(check.getDate() - 1);
+      continue;
+    }
+
+    if (isTrained || isThursday) {
       streak++;
+      check.setDate(check.getDate() - 1);
     } else {
-      if (i === 0) { check.setDate(check.getDate()-1); continue; }
       break;
     }
-    check.setDate(check.getDate()-1);
   }
 
   document.getElementById('hs-week').textContent  = weekNum;
