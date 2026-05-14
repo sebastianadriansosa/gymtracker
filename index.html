@@ -273,7 +273,7 @@
       <div class="header-stats">
         <div class="hstat"><div class="hstat-val" id="hs-week">1</div><div class="hstat-label">Semana</div></div>
         <div class="hstat"><div class="hstat-val" id="hs-total">0</div><div class="hstat-label">Día</div></div>
-        <div class="hstat"><div class="hstat-val" id="hs-tasks">0</div><div class="hstat-label">Tareas hoy</div></div>
+        <div class="hstat"><div class="hstat-val" id="hs-tasks">0</div><div class="hstat-label">Tareas</div></div>
         <div class="hstat"><div class="hstat-val" id="hs-streak">0</div><div class="hstat-label">Racha</div></div>
       </div>
       <div id="user-avatar-wrap" onclick="toggleUserMenu()" style="position:relative">
@@ -633,13 +633,16 @@ window.doUncheck = (dayId) => {
 // ── HEADER STATS ─────────────────────────────────
 function updateHeaderStats() {
   const checkins = userData.checkins || [];
+  const weights  = userData.weights  || {};
+
+  // All unique dates that have at least one checkin  e.g. "2025-05-11"
   const doneDates = new Set(checkins.map(c => c.slice(0, 10)));
 
   const today = new Date();
   today.setHours(0,0,0,0);
   const todayS = today.toISOString().slice(0,10);
 
-  // Week number since first training day
+  // ── Semana: week number since first ever checkin ──
   let weekNum = 1;
   if (doneDates.size > 0) {
     const firstDate = new Date(Array.from(doneDates).sort()[0]);
@@ -654,17 +657,18 @@ function updateHeaderStats() {
     weekNum = Math.floor((currentMonday - firstMonday) / (7*24*60*60*1000)) + 1;
   }
 
-  // Total unique days trained
+  // ── Día: total unique days with a checkin ──
   const totalDays = doneDates.size;
 
-  // Tasks today: exercises with weight saved today
-  const weights = userData.weights || {};
-  let tasksToday = 0;
+  // ── Tareas hoy: exercises that have a weight entry saved on a checked-in date ──
+  // Count ALL exercises that have any weight entry on ANY checked-in day
+  // (so it reflects total tasks logged across all completed days)
+  let tasksTotal = 0;
   Object.values(weights).forEach(arr => {
-    if (Array.isArray(arr) && arr.some(e => e.date === todayS)) tasksToday++;
+    if (Array.isArray(arr) && arr.some(e => doneDates.has(e.date))) tasksTotal++;
   });
 
-  // Streak: consecutive trained days (Thursdays = rest, don't break streak)
+  // ── Racha: consecutive trained days going back (Thursdays = rest) ──
   let streak = 0;
   const check = new Date(today);
   for (let i = 0; i < 180; i++) {
@@ -679,9 +683,9 @@ function updateHeaderStats() {
     check.setDate(check.getDate()-1);
   }
 
-  document.getElementById('hs-week').textContent = weekNum;
-  document.getElementById('hs-total').textContent = totalDays;
-  document.getElementById('hs-tasks').textContent = tasksToday;
+  document.getElementById('hs-week').textContent  = weekNum;
+  document.getElementById('hs-total').textContent  = totalDays;
+  document.getElementById('hs-tasks').textContent  = tasksTotal;
   document.getElementById('hs-streak').textContent = streak;
 }
 
