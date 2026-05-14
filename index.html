@@ -156,6 +156,19 @@
 
   .tip-box { background: var(--bg3); border-radius: var(--radius-sm); padding: 10px 14px; font-size: 12px; color: #aaa; margin-bottom: 14px; border-left: 3px solid; }
 
+  .ex-done-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 7px 14px; border-radius: var(--radius-sm); border: 1px solid #333;
+    background: var(--bg3); color: var(--muted);
+    font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 1px; cursor: pointer;
+    transition: all .2s; margin-bottom: 14px;
+  }
+  .ex-done-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .ex-done-btn.done { background: #1a2a00; color: var(--accent); border-color: var(--accent); }
+  .ex-done-btn.undone { background: #1a0000; color: #ff4444; border-color: #ff4444; }
+  .ex-done-row { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; }
+
   .yt-btn {
     display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px;
     background: #1a0a0a; color: #ff4444; border: 1px solid #3a1a1a;
@@ -530,6 +543,45 @@ function isCheckedIn(dayId) {
   return (userData.checkins || []).includes(`${dateStr}-${dayId}`);
 }
 
+// ── EXERCISE COMPLETION ──────────────────────────
+function exKey(dayId, exId) {
+  const dayIndex = DAYS.findIndex(d => d.id === dayId);
+  const dateStr = dateForDayIndex(dayIndex);
+  return `${dateStr}-${dayId}-${exId}`;
+}
+
+function completeEx(dayId, exId) {
+  if (!userData.exDone) userData.exDone = [];
+  const key = exKey(dayId, exId);
+  if (!userData.exDone.includes(key)) {
+    userData.exDone.push(key);
+    // increment tasks counter via checkin-adjacent logic
+    persistData();
+  }
+}
+
+function uncompleteEx(dayId, exId) {
+  if (!userData.exDone) return;
+  const key = exKey(dayId, exId);
+  userData.exDone = userData.exDone.filter(k => k !== key);
+  persistData();
+}
+
+function isExDone(dayId, exId) {
+  return (userData.exDone || []).includes(exKey(dayId, exId));
+}
+
+function countDoneExercises() {
+  if (!userData.exDone) return 0;
+  // Count unique exercise completions across all checked-in days
+  const checkins = userData.checkins || [];
+  const doneDates = new Set(checkins.map(c => c.substring(0,10)));
+  return userData.exDone.filter(k => {
+    const dateStr = k.substring(0,10);
+    return doneDates.has(dateStr);
+  }).length;
+}
+
 function formatDate(str) {
   if (!str) return '';
   const [y,m,d] = str.split('-');
@@ -609,6 +661,13 @@ function renderDay() {
             <div class="weight-unit">kg</div>
             <button class="save-btn" onclick="saveEx('${ex.id}')">Guardar</button>
           </div>
+          <div class="ex-done-row">
+            ${isExDone(d.id, ex.id)
+              ? `<button class="ex-done-btn done" style="cursor:default">✓ Ejercicio completado</button>
+                 <button class="ex-done-btn undone" onclick="doUncompleteEx('${d.id}','${ex.id}')">↩ Desmarcar</button>`
+              : `<button class="ex-done-btn" onclick="doCompleteEx('${d.id}','${ex.id}')">◯ Marcar ejercicio como hecho</button>`
+            }
+          </div>
           ${history.length>0?`<div class="history-list"><div class="weight-label" style="margin-top:12px">Historial</div>
             ${history.slice().reverse().slice(0,6).map((h,idx,arr)=>{
               const prev=arr[idx+1];
@@ -650,6 +709,18 @@ window.doUncheck = (dayId) => {
   updateHeaderStats();
 };
 
+window.doCompleteEx = (dayId, exId) => {
+  completeEx(dayId, exId);
+  renderDay();
+  updateHeaderStats();
+};
+
+window.doUncompleteEx = (dayId, exId) => {
+  uncompleteEx(dayId, exId);
+  renderDay();
+  updateHeaderStats();
+};
+
 // ── HEADER STATS ─────────────────────────────────
 function updateHeaderStats() {
   const checkins = userData.checkins || [];
@@ -687,11 +758,8 @@ function updateHeaderStats() {
   // ── Día: count of unique dates with checkin ──
   const totalDays = doneDates.size;
 
-  // ── Tareas: exercises with weight on any checked-in date ──
-  let tasksTotal = 0;
-  Object.values(weights).forEach(arr => {
-    if (Array.isArray(arr) && arr.some(e => doneDates.has(e.date))) tasksTotal++;
-  });
+  // ── Tareas: exercises explicitly marked as done on checked-in days ──
+  const tasksTotal = countDoneExercises();
 
   // ── Racha: consecutive days going back from today ──
   // Skip today if not yet checked in (don't break streak)
