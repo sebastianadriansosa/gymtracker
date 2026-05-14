@@ -1261,14 +1261,29 @@ function renderHistorial(){
 window.showModal=(title,text)=>{document.getElementById('modal-title').textContent=title;document.getElementById('modal-text').textContent=text;document.getElementById('modal').classList.add('open');};
 window.closeModal=()=>document.getElementById('modal').classList.remove('open');
 
+
 // ── INIT ──────────────────────────────────────────
-function init(){
-  const dow=new Date().getDay();
-  const map={1:0,2:1,3:2,4:3,5:4,6:5,0:6};
-  activeDay=map[dow]??0;
-  initDayTabs();renderDay();updateHeaderStats();
+function init() {
+  const dow = new Date().getDay();
+  const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+  if (typeof showDay === 'function') {
+    showDay(days[dow]);
+  }
+
+  // Integración con Firebase (Auth check)
+  if (typeof auth !== 'undefined') {
+    auth.onAuthStateChanged(user => {
+      if (user) {
+        console.log("Usuario identificado:", user.uid);
+        if (typeof loadData === 'function') loadData();
+      } else {
+        console.log("Sin sesión activa.");
+      }
+    });
+  }
 }
 
+window.onload = init;
 </script>
 </body>
 </html>
