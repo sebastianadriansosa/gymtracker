@@ -271,7 +271,7 @@
     <div class="logo">GymTracker<span>Rutina de Musculación</span></div>
     <div class="header-right">
       <div class="header-stats">
-        <div class="hstat"><div class="hstat-val" id="hs-week">S1</div><div class="hstat-label">Semana</div></div>
+        <div class="hstat"><div class="hstat-val" id="hs-week">1</div><div class="hstat-label">Semana</div></div>
         <div class="hstat"><div class="hstat-val" id="hs-total">0</div><div class="hstat-label">Día</div></div>
         <div class="hstat"><div class="hstat-val" id="hs-tasks">0</div><div class="hstat-label">Tareas hoy</div></div>
         <div class="hstat"><div class="hstat-val" id="hs-streak">0</div><div class="hstat-label">Racha</div></div>
@@ -499,6 +499,13 @@ function checkInDay(dayId) {
   persistData();
 }
 
+function uncheckDay(dayId) {
+  if (!userData.checkins) return;
+  const key = `${todayStr()}-${dayId}`;
+  userData.checkins = userData.checkins.filter(c => c !== key);
+  persistData();
+}
+
 function isCheckedIn(dayId) {
   return (userData.checkins || []).includes(`${todayStr()}-${dayId}`);
 }
@@ -543,7 +550,14 @@ function renderDay() {
     <div class="day-icon">${d.icon}</div>
     <div><div class="day-sub" style="color:${d.color}">${d.label}</div>
     <div class="day-title">${d.muscle}</div><div class="day-sub">${d.focus}</div></div>`;
-  html += `<button class="checkin-btn ${checked?'checked':''}" onclick="doCheckIn('${d.id}')">${checked?'✓ Completado':'✓ Marcar como hecho'}</button>`;
+  if (checked) {
+    html += `<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-left:auto">
+      <button class="checkin-btn checked" style="cursor:default">✓ Completado</button>
+      <button onclick="doUncheck('${d.id}')" style="background:none;border:none;color:#ff4444;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;cursor:pointer;font-family:'DM Sans',sans-serif;padding:2px 0">↩ Desmarcar día</button>
+    </div>`;
+  } else {
+    html += `<button class="checkin-btn" onclick="doCheckIn('${d.id}')" style="margin-left:auto">✓ Marcar como hecho</button>`;
+  }
   html += `</div>`;
 
   if (d.isRest) {
@@ -610,6 +624,12 @@ window.doCheckIn = (dayId) => {
   showModal(`¡${d.label} completado!`, `Registraste el entrenamiento de ${d.muscle}. ¡Seguí así!`);
 };
 
+window.doUncheck = (dayId) => {
+  uncheckDay(dayId);
+  renderDay();
+  updateHeaderStats();
+};
+
 // ── HEADER STATS ─────────────────────────────────
 function updateHeaderStats() {
   const checkins = userData.checkins || [];
@@ -659,7 +679,7 @@ function updateHeaderStats() {
     check.setDate(check.getDate()-1);
   }
 
-  document.getElementById('hs-week').textContent = 'S' + weekNum;
+  document.getElementById('hs-week').textContent = weekNum;
   document.getElementById('hs-total').textContent = totalDays;
   document.getElementById('hs-tasks').textContent = tasksToday;
   document.getElementById('hs-streak').textContent = streak;
