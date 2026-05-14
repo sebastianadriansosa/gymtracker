@@ -271,8 +271,9 @@
     <div class="logo">GymTracker<span>Rutina de Musculación</span></div>
     <div class="header-right">
       <div class="header-stats">
-        <div class="hstat"><div class="hstat-val" id="hs-week">0</div><div class="hstat-label">Semana</div></div>
-        <div class="hstat"><div class="hstat-val" id="hs-total">0</div><div class="hstat-label">Total</div></div>
+        <div class="hstat"><div class="hstat-val" id="hs-week">S1</div><div class="hstat-label">Semana</div></div>
+        <div class="hstat"><div class="hstat-val" id="hs-total">0</div><div class="hstat-label">Día</div></div>
+        <div class="hstat"><div class="hstat-val" id="hs-tasks">0</div><div class="hstat-label">Tareas hoy</div></div>
         <div class="hstat"><div class="hstat-val" id="hs-streak">0</div><div class="hstat-label">Racha</div></div>
       </div>
       <div id="user-avatar-wrap" onclick="toggleUserMenu()" style="position:relative">
@@ -380,7 +381,7 @@ const DAYS = [
       {id:'hip-thrust',   name:'Hip thrust con barra o mancuerna', series:'4',reps:'12–15',rest:'60s',tip:'Apretá el glúteo arriba, sostené 1 seg',group:'Glúteos'},
       {id:'pantorrillas', name:'Elevación de pantorrillas de pie', series:'3',reps:'20',   rest:'30s',tip:'Rango completo, lento',group:'Piernas'},
     ]},
-  { id:'jueves', label:'Jueves', short:'Jue', muscle:'Descanso', color:'#666', icon:'😴', focus:'Recuperación activa', rest:true, walk:false, exercises:[] },
+  { id:'jueves', label:'Jueves', short:'Jue', muscle:'Descanso', color:'#666', icon:'😴', focus:'Recuperación activa', rest:false, walk:false, isRest:true, exercises:[] },
   { id:'viernes', label:'Viernes', short:'Vie', muscle:'Hombros + Core', color:'#F72585', icon:'🔥', focus:'Deltoides completo + estabilidad', rest:false, walk:false,
     exercises:[
       {id:'press-militar', name:'Press militar con mancuernas',        series:'4',reps:'10–12',rest:'60s',tip:'No arquees la espalda baja',group:'Hombros'},
@@ -399,7 +400,7 @@ const DAYS = [
       {id:'curl-concentrado', name:'Curl concentrado bíceps',          series:'3',reps:'12 c/brazo',rest:'45s',tip:'Máxima contracción arriba',group:'Bíceps'},
       {id:'plancha-lateral',  name:'Plancha lateral',                  series:'3',reps:'20–30 seg c/lado',rest:'30s',tip:'Trabajá el oblicuo',group:'Core'},
     ]},
-  { id:'domingo', label:'Domingo', short:'Dom', muscle:'Caminata', color:'#4CAF50', icon:'🚶', focus:'Cardio suave + recuperación', rest:false, walk:true, exercises:[] },
+  { id:'domingo', label:'Domingo', short:'Dom', muscle:'Caminata', color:'#4CAF50', icon:'🚶', focus:'Cardio suave + recuperación', rest:false, walk:true, isRest:false, exercises:[] },
 ];
 
 // ── STATE ────────────────────────────────────────
@@ -542,10 +543,10 @@ function renderDay() {
     <div class="day-icon">${d.icon}</div>
     <div><div class="day-sub" style="color:${d.color}">${d.label}</div>
     <div class="day-title">${d.muscle}</div><div class="day-sub">${d.focus}</div></div>`;
-  if (!d.rest) html += `<button class="checkin-btn ${checked?'checked':''}" onclick="doCheckIn('${d.id}')">${checked?'✓ Completado':'✓ Marcar como hecho'}</button>`;
+  html += `<button class="checkin-btn ${checked?'checked':''}" onclick="doCheckIn('${d.id}')">${checked?'✓ Completado':'✓ Marcar como hecho'}</button>`;
   html += `</div>`;
 
-  if (d.rest) {
+  if (d.isRest) {
     html += `<div class="rest-card"><div class="rest-icon">😴</div><div class="rest-title">Día de Descanso Completo</div><div class="rest-text">El descanso es parte del entrenamiento. El músculo se regenera y crece.</div></div>`;
   } else if (d.walk) {
     html += `<div class="rest-card"><div class="rest-icon">🚶</div><div class="rest-title">Caminata Activa</div><div class="rest-text">1 hora de caminata a ritmo moderado. FC entre 50–65% del máximo. Favorece la recuperación y acelera la quema de grasa.</div></div>`;
@@ -612,29 +613,40 @@ window.doCheckIn = (dayId) => {
 // ── HEADER STATS ─────────────────────────────────
 function updateHeaderStats() {
   const checkins = userData.checkins || [];
-  // checkin format: "YYYY-MM-DD-dayid" — extract unique dates
   const doneDates = new Set(checkins.map(c => c.slice(0, 10)));
 
-  // This week Mon–Sun
   const today = new Date();
-  const dow = today.getDay();
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - (dow === 0 ? 6 : dow - 1));
-  monday.setHours(0,0,0,0);
-  let weekCount = 0;
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    if (doneDates.has(d.toISOString().slice(0,10))) weekCount++;
+  today.setHours(0,0,0,0);
+  const todayS = today.toISOString().slice(0,10);
+
+  // Week number since first training day
+  let weekNum = 1;
+  if (doneDates.size > 0) {
+    const firstDate = new Date(Array.from(doneDates).sort()[0]);
+    const fd = firstDate.getDay();
+    const firstMonday = new Date(firstDate);
+    firstMonday.setDate(firstDate.getDate() - (fd === 0 ? 6 : fd - 1));
+    firstMonday.setHours(0,0,0,0);
+    const todayDow = today.getDay();
+    const currentMonday = new Date(today);
+    currentMonday.setDate(today.getDate() - (todayDow === 0 ? 6 : todayDow - 1));
+    currentMonday.setHours(0,0,0,0);
+    weekNum = Math.floor((currentMonday - firstMonday) / (7*24*60*60*1000)) + 1;
   }
 
   // Total unique days trained
   const totalDays = doneDates.size;
 
-  // Streak: consecutive trained days going back (Thursdays = rest, don't break)
+  // Tasks today: exercises with weight saved today
+  const weights = userData.weights || {};
+  let tasksToday = 0;
+  Object.values(weights).forEach(arr => {
+    if (Array.isArray(arr) && arr.some(e => e.date === todayS)) tasksToday++;
+  });
+
+  // Streak: consecutive trained days (Thursdays = rest, don't break streak)
   let streak = 0;
   const check = new Date(today);
-  check.setHours(0,0,0,0);
   for (let i = 0; i < 180; i++) {
     const ds = check.toISOString().slice(0,10);
     const dw = check.getDay();
@@ -647,8 +659,9 @@ function updateHeaderStats() {
     check.setDate(check.getDate()-1);
   }
 
-  document.getElementById('hs-week').textContent = weekCount;
+  document.getElementById('hs-week').textContent = 'S' + weekNum;
   document.getElementById('hs-total').textContent = totalDays;
+  document.getElementById('hs-tasks').textContent = tasksToday;
   document.getElementById('hs-streak').textContent = streak;
 }
 
@@ -661,10 +674,11 @@ function renderReports(){
 
 function renderReportStats(){
   const checkins=userData.checkins||[];
-  const today=new Date();const dow=today.getDay();
-  const monday=new Date(today);monday.setDate(today.getDate()-(dow===0?6:dow-1));
+  const today=new Date();today.setHours(0,0,0,0);
+  const dow2=today.getDay();
+  const monday2=new Date(today);monday2.setDate(today.getDate()-(dow2===0?6:dow2-1));
   let weekCount=0;
-  for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);if(checkins.some(c=>c.startsWith(d.toISOString().slice(0,10))))weekCount++;}
+  for(let i=0;i<7;i++){const d=new Date(monday2);d.setDate(monday2.getDate()+i);if(checkins.some(c=>c.startsWith(d.toISOString().slice(0,10))))weekCount++;}
   const uniqueDays=new Set(checkins.map(c=>c.slice(0,10))).size;
   const thisMonth=todayStr().slice(0,7);
   const monthCount=new Set(checkins.filter(c=>c.startsWith(thisMonth)).map(c=>c.slice(0,10))).size;
