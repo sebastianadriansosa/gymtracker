@@ -1275,8 +1275,8 @@ async function loadData() {
       const data = doc.data();
       if (data.rutina) {
         Object.assign(rutina, data.rutina);
-        renderRutina();
-        renderHistorial();
+        if (typeof renderRutina === 'function') renderRutina();
+        if (typeof renderHistorial === 'function') renderHistorial();
       }
     }
   } catch (e) {
@@ -1302,7 +1302,9 @@ async function saveData() {
 function init() {
   const dow = new Date().getDay();
   const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-  showDay(days[dow]);
+  if (typeof showDay === 'function') {
+    showDay(days[dow]);
+  }
 
   auth.onAuthStateChanged(user => {
     if (user) {
