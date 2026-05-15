@@ -1,10 +1,9 @@
-name: Deploy Environments
+name: Deploy Production
 
 on:
   push:
     branches:
       - main
-      - develop
 
 permissions:
   contents: read
@@ -22,17 +21,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Current Code
+      - name: Checkout Code
         uses: actions/checkout@v4
-
-      # Si estamos en la rama develop (Desarrollo), creamos la subcarpeta /dev
-      - name: Organize Folders Based on Branch
-        run: |
-          if [ "${{ github.ref }}" = "refs/heads/develop" ]; then
-            mkdir -p dev
-            cp index.html dev/
-            rm index.html
-          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
