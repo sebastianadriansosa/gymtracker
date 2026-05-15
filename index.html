@@ -1045,11 +1045,11 @@ window.saveEx = (exId) => {
         let diff = '';
         if (prev) {
           const dv = parseFloat((h.kg-prev.kg).toFixed(1));
-          diff = dv>0 ? \`<span class="history-diff diff-up">▲ +\${dv}</span>\`
-               : dv<0 ? \`<span class="history-diff diff-down">▼ \${dv}</span>\`
-               : \`<span class="history-diff diff-same">= igual</span>\`;
+          diff = dv>0 ? `<span class="history-diff diff-up">▲ +${dv}</span>`
+               : dv<0 ? `<span class="history-diff diff-down">▼ ${dv}</span>`
+               : `<span class="history-diff diff-same">= igual</span>`;
         }
-        return \`<div class="history-item"><span class="history-date">\${formatDate(h.date)}</span><span><span class="history-val">\${h.kg} kg</span>\${diff}</span></div>\`;
+        return `<div class="history-item"><span class="history-date">${formatDate(h.date)}</span><span><span class="history-val">${h.kg} kg</span>${diff}</span></div>`;
       }).join('');
     }
   }
