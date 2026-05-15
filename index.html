@@ -74,10 +74,9 @@
 
   /* user menu */
   .user-menu {
-    position: absolute; top: 44px; right: 0;
+    position: absolute; top: 64px; right: 16px;
     background: var(--bg2); border: 1px solid #333; border-radius: var(--radius);
-    padding: 8px; min-width: 200px; z-index: 500; display: none;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+    padding: 8px; min-width: 200px; z-index: 200; display: none;
   }
   .user-menu.open { display: block; }
   .user-menu-name { padding: 8px 12px; font-weight: 700; font-size: 13px; }
@@ -355,14 +354,14 @@
         <div class="hstat"><div class="hstat-val" id="hs-tasks">0</div><div class="hstat-label">Tareas</div></div>
         <div class="hstat"><div class="hstat-val" id="hs-streak">0</div><div class="hstat-label">Racha</div></div>
       </div>
-      <div id="user-avatar-wrap" onclick="toggleUserMenu()" style="position:relative;cursor:pointer">
+      <div id="user-avatar-wrap" onclick="toggleUserMenu()" style="position:relative">
         <div class="user-avatar-placeholder" id="user-avatar">👤</div>
-        <div class="user-menu" id="user-menu">
-          <div class="user-menu-name" id="user-name">—</div>
-          <div class="user-menu-email" id="user-email">—</div>
-          <button class="logout-btn" onclick="event.stopPropagation();logout()">🚪 Cerrar sesión</button>
-        </div>
       </div>
+    </div>
+    <div class="user-menu" id="user-menu">
+      <div class="user-menu-name" id="user-name">—</div>
+      <div class="user-menu-email" id="user-email">—</div>
+      <button class="logout-btn" onclick="logout()">🚪 Cerrar sesión</button>
     </div>
   </header>
 
@@ -519,14 +518,8 @@ onAuthStateChanged(auth, async user => {
     document.getElementById('user-name').textContent = user.displayName || 'Usuario';
     document.getElementById('user-email').textContent = user.email || '';
     if (user.photoURL) {
-      const av = document.getElementById('user-avatar');
-      if (av) {
-        const img = document.createElement('img');
-        img.src = user.photoURL;
-        img.className = 'user-avatar';
-        img.id = 'user-avatar';
-        av.replaceWith(img);
-      }
+      document.getElementById('user-avatar').outerHTML =
+        `<img src="${user.photoURL}" class="user-avatar" id="user-avatar" onclick="toggleUserMenu()">`;
     }
     await loadUserData();
     init();
@@ -753,17 +746,6 @@ window.timerTick = function(exId) {
 }
 
 window.timerStart = function(exId) {
-  // Init timer from DOM data attributes if not yet initialized
-  if (!timerState[exId]) {
-    const wrap = document.getElementById('timer-widget-' + exId);
-    if (!wrap) return;
-    const dayId = wrap.getAttribute('data-dayid') || '';
-    const totalSeries = parseInt(wrap.getAttribute('data-series')) || 3;
-    const restStr = wrap.getAttribute('data-rest') || '60s';
-    const restSecs = getRestSeconds(restStr);
-    initTimer(exId, totalSeries, restSecs);
-    if (timerState[exId]) timerState[exId].dayId = dayId;
-  }
   const t = timerState[exId];
   if (!t || t.phase !== 'idle') return;
   t.phase = 'active';
@@ -835,76 +817,84 @@ window.timerStop = function(exId, dayId) {
 }
 
 window.renderTimerWidget = function(exId) {
+  const el = document.getElementById('timer-widget-' + exId);
+  if (!el) return;
   const t = timerState[exId];
   if (!t) return;
+
   const phase = t.phase;
+  let clockClass = 'timer-clock idle';
+  let phaseLabel = 'LISTO';
+  let clockVal = '0:00';
 
-  // Clock
-  const clockEl = document.getElementById('tclock-' + exId);
-  const phaseEl = document.getElementById('tphase-' + exId);
-  const btnsEl  = document.getElementById('tbtns-'  + exId);
-  const dotsEl  = document.getElementById('dots-'   + exId);
-  const histEl  = document.getElementById('thist-'  + exId);
-  if (!clockEl) return;
-
-  let clockClass = 'timer-clock idle', phaseLabel = 'LISTO PARA INICIAR', clockVal = '0:00';
   if (phase === 'active') {
     clockClass = 'timer-clock active';
-    phaseLabel = 'SERIE ' + t.currentSeries + ' DE ' + t.totalSeries;
+    phaseLabel = `SERIE ${t.currentSeries} DE ${t.totalSeries}`;
     clockVal = fmtSecs(t.elapsed);
   } else if (phase === 'rest') {
     clockClass = 'timer-clock rest';
-    phaseLabel = 'DESCANSO — FALTAN';
-    clockVal = fmtSecs(Math.max(0, t.restSecs - t.restElapsed));
+    const rem = t.restSecs - t.restElapsed;
+    phaseLabel = `DESCANSO — FALTAN`;
+    clockVal = fmtSecs(Math.max(0, rem));
   } else if (phase === 'over') {
     clockClass = 'timer-clock over';
-    phaseLabel = 'DESCANSO EXCEDIDO';
-    clockVal = '+' + fmtSecs(t.restElapsed - t.restSecs);
+    const over = t.restElapsed - t.restSecs;
+    phaseLabel = `DESCANSO EXCEDIDO +`;
+    clockVal = fmtSecs(over);
+  } else if (phase === 'idle') {
+    clockClass = 'timer-clock idle';
+    phaseLabel = 'LISTO PARA INICIAR';
+    clockVal = '0:00';
   }
 
-  clockEl.className = clockClass;
-  clockEl.textContent = clockVal;
-  if (phaseEl) phaseEl.textContent = phaseLabel;
+  // Series dots
+  const dots = Array.from({length: t.totalSeries}, (_,i) => {
+    const n = i+1;
+    let cls = 'series-dot';
+    if (t.seriesLog.find(s=>s.series===n)) cls += ' done';
+    else if (n === t.currentSeries && phase === 'active') cls += ' active';
+    return `<div class="${cls}">${n}</div>`;
+  }).join('');
 
-  // Dots
-  if (dotsEl) {
-    dotsEl.innerHTML = '';
-    for (let i = 1; i <= t.totalSeries; i++) {
-      const dot = document.createElement('div');
-      dot.className = 'series-dot' + (t.seriesLog.find(s=>s.series===i) ? ' done' : (i===t.currentSeries && phase==='active' ? ' active' : ''));
-      dot.textContent = i;
-      dotsEl.appendChild(dot);
-    }
+  // Mini history
+  let histHtml = '';
+  if (t.seriesLog.length > 0) {
+    histHtml = '<div class="timer-history-mini">';
+    t.seriesLog.forEach(s => {
+      histHtml += `<div class="th-row"><span>Serie ${s.series}</span><span>${fmtSecs(s.duration)}</span></div>`;
+    });
+    t.restLog.forEach(r => {
+      const cls = r.over > 0 ? 'th-over' : 'th-ok';
+      const over = r.over > 0 ? ` (+${r.over}s)` : '';
+      histHtml += `<div class="th-row ${cls}"><span>Descanso ${r.between}→${r.between+1}</span><span>${fmtSecs(r.duration)}${over}</span></div>`;
+    });
+    histHtml += '</div>';
   }
 
   // Buttons
-  if (btnsEl) {
-    btnsEl.innerHTML = '';
-    if (phase === 'idle') {
-      btnsEl.innerHTML = '<button class="tbtn tbtn-start" onclick="timerStart('' + exId + '')">&#9658; Iniciar serie</button>';
-    } else if (phase === 'active') {
-      btnsEl.innerHTML = '<button class="tbtn tbtn-pause" onclick="timerPause('' + exId + '')">&#9616;&#9616; Pausa / Descanso</button>'
-        + '<button class="tbtn tbtn-stop" onclick="timerStop('' + exId + '','' + t.dayId + '')">&#9632; Terminar</button>';
-    } else if (phase === 'rest' || phase === 'over') {
-      btnsEl.innerHTML = '<button class="tbtn tbtn-resume" onclick="timerResume('' + exId + '')">&#9658; Siguiente serie</button>'
-        + '<button class="tbtn tbtn-stop" onclick="timerStop('' + exId + '','' + t.dayId + '')">&#9632; Terminar</button>';
-    }
+  let btns = '';
+  if (phase === 'idle') {
+    btns = `<button class="tbtn tbtn-start" onclick="timerStart('${exId}')">▶ Iniciar serie</button>`;
+  } else if (phase === 'active') {
+    btns = `<button class="tbtn tbtn-pause" onclick="timerPause('${exId}')">⏸ Pausa / Descanso</button>
+            <button class="tbtn tbtn-stop" onclick="timerStop('${exId}','${t.dayId}')">⏹ Terminar</button>`;
+  } else if (phase === 'rest' || phase === 'over') {
+    btns = `<button class="tbtn tbtn-resume" onclick="timerResume('${exId}')">▶ Siguiente serie</button>
+            <button class="tbtn tbtn-stop" onclick="timerStop('${exId}','${t.dayId}')">⏹ Terminar</button>`;
   }
 
-  // Mini history
-  if (histEl && t.seriesLog.length > 0) {
-    let h = '<div class="timer-history-mini">';
-    t.seriesLog.forEach(function(s) {
-      h += '<div class="th-row"><span>Serie ' + s.series + '</span><span>' + fmtSecs(s.duration) + '</span></div>';
-    });
-    t.restLog.forEach(function(r) {
-      var cls = r.over > 0 ? 'th-over' : 'th-ok';
-      var ov = r.over > 0 ? ' (+' + r.over + 's)' : '';
-      h += '<div class="th-row ' + cls + '"><span>Descanso ' + r.between + '→' + (r.between+1) + '</span><span>' + fmtSecs(r.duration) + ov + '</span></div>';
-    });
-    h += '</div>';
-    histEl.innerHTML = h;
-  }
+  el.innerHTML = `
+    <div class="timer-series-row">
+      <span class="timer-series-label">Series</span>
+      <div class="series-dots">${dots}</div>
+    </div>
+    <div class="timer-display">
+      <div class="timer-phase">${phaseLabel}</div>
+      <div class="${clockClass}">${clockVal}</div>
+    </div>
+    <div class="timer-btns">${btns}</div>
+    ${histHtml}
+  `;
 }
 
 // Stop all timers when switching day
@@ -984,13 +974,19 @@ function renderDay() {
             Ver en YouTube
           </a>
           <div class="tip-box" style="border-left-color:${d.color}">💡 ${ex.tip}</div>
-          <div class="timer-wrap" id="timer-widget-${ex.id}" data-dayid="${d.id}">
-            <div class="timer-series-row"><span class="timer-series-label">Series</span><div class="series-dots" id="dots-${ex.id}"></div></div>
-            <div class="timer-display"><div class="timer-phase" id="tphase-${ex.id}">LISTO PARA INICIAR</div><div class="timer-clock idle" id="tclock-${ex.id}">0:00</div></div>
-            <div class="timer-btns" id="tbtns-${ex.id}"><button class="tbtn tbtn-start" onclick="timerStart('${ex.id}')">&#9658; Iniciar serie</button></div>
-            <div id="thist-${ex.id}"></div>
+          <div class="timer-wrap" id="timer-widget-${ex.id}">
+            ${(()=>{
+              const restSecs = getRestSeconds(ex.rest);
+              const totalSeries = parseInt(ex.series) || 3;
+              initTimer(ex.id, totalSeries, restSecs);
+              if(timerState[ex.id]) timerState[ex.id].dayId = d.id;
+              const t = timerState[ex.id];
+              const dots = Array.from({length:totalSeries},(_,i)=>`<div class="series-dot">${i+1}</div>`).join('');
+              return `<div class="timer-series-row"><span class="timer-series-label">Series</span><div class="series-dots">${dots}</div></div>
+              <div class="timer-display"><div class="timer-phase">LISTO PARA INICIAR</div><div class="timer-clock idle">0:00</div></div>
+              <div class="timer-btns"><button class="tbtn tbtn-start" onclick="timerStart('${ex.id}')">▶ Iniciar serie</button></div>`;
+            })()}
           </div>
-                    </div>
           <div class="weight-label">Registrar peso cargado</div>
           <div class="weight-input-row">
             <input class="weight-input" type="number" id="w-${ex.id}" placeholder="${last!==null?last:'0'}" min="0" step="0.5" value="${last!==null?last:''}">
