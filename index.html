@@ -1261,26 +1261,57 @@ function renderHistorial(){
 window.showModal=(title,text)=>{document.getElementById('modal-title').textContent=title;document.getElementById('modal-text').textContent=text;document.getElementById('modal').classList.add('open');};
 window.closeModal=()=>document.getElementById('modal').classList.remove('open');
 
+// ── FIREBASE CONFIG & DATA ───────────────────────
+const db = firebase.firestore();
+const auth = firebase.auth();
+const provider = new firebase.auth.GoogleAuthProvider();
+
+async function loadData() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    const doc = await db.collection('users').doc(user.uid).get();
+    if (doc.exists) {
+      const data = doc.data();
+      if (data.rutina) {
+        Object.assign(rutina, data.rutina);
+        renderRutina();
+        renderHistorial();
+      }
+    }
+  } catch (e) {
+    console.error("Error al cargar desde Firestore:", e);
+  }
+}
+
+async function saveData() {
+  const user = auth.currentUser;
+  if (!user) return;
+  try {
+    await db.collection('users').doc(user.uid).set({
+      rutina: rutina,
+      lastUpdate: new Date().toISOString()
+    }, { merge: true });
+    console.log("Datos guardados en Firebase");
+  } catch (e) {
+    console.error("Error al guardar:", e);
+  }
+}
 
 // ── INIT ──────────────────────────────────────────
 function init() {
   const dow = new Date().getDay();
   const days = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
-  if (typeof showDay === 'function') {
-    showDay(days[dow]);
-  }
+  showDay(days[dow]);
 
-  // Integración con Firebase (Auth check)
-  if (typeof auth !== 'undefined') {
-    auth.onAuthStateChanged(user => {
-      if (user) {
-        console.log("Usuario identificado:", user.uid);
-        if (typeof loadData === 'function') loadData();
-      } else {
-        console.log("Sin sesión activa.");
-      }
-    });
-  }
+  auth.onAuthStateChanged(user => {
+    if (user) {
+      console.log("Sesión activa:", user.uid);
+      loadData();
+    } else {
+      console.log("Usuario no identificado.");
+    }
+  });
 }
 
 window.onload = init;
