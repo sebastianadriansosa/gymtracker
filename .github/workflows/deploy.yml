@@ -22,16 +22,45 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Current Branch
         uses: actions/checkout@v4
 
-      # Si estamos en la rama develop, movemos el index.html a una subcarpeta /dev para aislarlo
+      - name: Checkout Existing Production/Dev (Prevent overwrite)
+        uses: actions/checkout@v4
+        with:
+          ref: 'gh-pages'
+          path: 'old-deployment'
+        continue-on-error: true
+
+      # Fusionar el despliegue anterior para no perder el otro entorno
+      - name: Merge Deployments
+        run: |
+          if [ -d "old-deployment" ]; then
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              # Si estamos en main, preservamos la carpeta /dev vieja
+              if [ -d "old-deployment/dev" ]; then
+                cp -r old-deployment/dev ./dev
+              fi
+            elif [ "${{ github.ref }}" = "refs/heads/develop" ]; then
+              # Si estamos en develop, preservamos el index.html viejo de producción
+              if [ -f "old-deployment/index.html" ]; then
+                cp old-deployment/index.html ./production-index.html
+              fi
+            fi
+            rm -rf old-deployment
+          fi
+
+      # Ajustar carpetas si estamos en la rama de desarrollo
       - name: Setup Dev Environment Folder
         if: github.ref == 'refs/heads/develop'
         run: |
-          mkdir dev
+          mkdir -p dev
           cp index.html dev/
           rm index.html
+          # Restaurar la producción para que no se borre
+          if [ -f "production-index.html" ]; then
+            mv production-index.html index.html
+          fi
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
