@@ -25,9 +25,7 @@ jobs:
       - name: Checkout Current Code
         uses: actions/checkout@v4
 
-      # Si estamos en la rama main (Producción), el archivo se queda en la raíz
       # Si estamos en la rama develop (Desarrollo), creamos la subcarpeta /dev
-       Madre de la automatización limpia
       - name: Organize Folders Based on Branch
         run: |
           if [ "${{ github.ref }}" = "refs/heads/develop" ]; then
