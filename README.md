@@ -14,6 +14,14 @@ Abrí `index.html` en cualquier navegador. No necesita servidor ni instalación.
 4. En unos minutos tenés la app en `https://sebastianadriansosa.github.io/gymtracker/`
 5. Y el acceso a firebase: `https://console.firebase.google.com/project/gymtracker-519a4/firestore/databases/-default-/data/~2Fusers~2FNA4YNk4m6QPSyPt4ibT6KQ1Fwzv1`
 
+## Ambientes DEV
+1. Ambiente Develop: `https://sebastianadriansosa.github.io/gymtracker/dev/`
+2. Firebase Develop: `https://console.firebase.google.com/project/gymtracker-dev-b9bf9/firestore/databases/-default-/data/~2Fusers~2FOWqlQn2yEPMkhVdV4jhQkXJd2Ot1`
+
+## Ambiente PROD
+1. Ambiente Produccion: `https://sebastianadriansosa.github.io/gymtracker/`
+2. Firebase Produccion: `https://console.firebase.google.com/project/gymtracker-519a4/firestore/databases/-default-/data/~2Fusers~2FNA4YNk4m6QPSyPt4ibT6KQ1Fwzv1`
+
 ## 📱 Funciones
 
 - **Rutina**: Navegá por cada día de la semana. Abre automáticamente el día de hoy.
